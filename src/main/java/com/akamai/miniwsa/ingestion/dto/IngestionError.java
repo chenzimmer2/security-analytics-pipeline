@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class IngestionError {
+    private int    eventIndex;
     private String field;
     private String message;
 }

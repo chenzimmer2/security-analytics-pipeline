@@ -24,10 +24,10 @@ public class ValidationService {
      * Returns an empty list when the request is valid;
      * otherwise a list of field-level errors.
      */
-    public List<IngestionError> validate(SecurityEventRequest request) {
+    public List<IngestionError> validate(SecurityEventRequest request, int eventIndex) {
         Set<ConstraintViolation<SecurityEventRequest>> violations = validator.validate(request);
         return violations.stream()
-                .map(v -> new IngestionError(v.getPropertyPath().toString(), v.getMessage()))
+                .map(v -> new IngestionError(eventIndex, v.getPropertyPath().toString(), v.getMessage()))
                 .toList();
     }
 }

@@ -19,7 +19,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException ex) {
         log.debug("Unreadable request body: {}", ex.getMessage());
         return ResponseEntity.badRequest()
-                .body(Map.of("errors", List.of(new IngestionError("body", "Invalid or missing request body"))));
+                .body(Map.of("errors", List.of(new IngestionError(-1, "body", "Invalid or missing request body"))));
     }
 
     /**

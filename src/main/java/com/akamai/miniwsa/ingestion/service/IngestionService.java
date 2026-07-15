@@ -1,6 +1,7 @@
 package com.akamai.miniwsa.ingestion.service;
 
 import com.akamai.miniwsa.domain.SecurityEvent;
+import com.akamai.miniwsa.enrichment.service.EnrichmentService;
 import com.akamai.miniwsa.ingestion.dto.IngestionError;
 import com.akamai.miniwsa.ingestion.dto.IngestionResponse;
 import com.akamai.miniwsa.ingestion.dto.SecurityEventRequest;
@@ -29,6 +30,7 @@ public class IngestionService {
 
     private final ValidationService       validationService;
     private final SecurityEventMapper     mapper;
+    private final EnrichmentService       enrichmentService;
     private final SecurityEventRepository repository;
 
     @Transactional
@@ -36,12 +38,14 @@ public class IngestionService {
         List<IngestionError> validationErrors = new ArrayList<>();
         List<SecurityEvent>  validEvents      = new ArrayList<>();
 
-        for (SecurityEventRequest request : requests) {
-            List<IngestionError> errors = validationService.validate(request);
+        for (int i = 0; i < requests.size(); i++) {
+            SecurityEventRequest request = requests.get(i);
+            List<IngestionError> errors = validationService.validate(request, i);
             if (!errors.isEmpty()) {
                 validationErrors.addAll(errors);
             } else {
                 SecurityEvent event = mapper.toEntity(request);
+                enrichmentService.enrich(event, request);
                 validEvents.add(event);
             }
         }
@@ -54,9 +58,7 @@ public class IngestionService {
                     .build();
         }
 
-        // Single saveAll → one flush at commit time.
-        // DataIntegrityViolationException (duplicate event_id) propagates naturally;
-        // the TX is rolled back by Spring and @ControllerAdvice returns 409.
+
         repository.saveAll(validEvents);
         log.debug("Batch ingested {} events", validEvents.size());
 
