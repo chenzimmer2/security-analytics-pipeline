@@ -1,5 +1,6 @@
 package com.akamai.miniwsa.stats.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Value;
 
@@ -9,6 +10,7 @@ import java.util.Map;
 
 @Value
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class SummaryResponse {
     Long configId;
     TimeRange timeRange;
