@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -31,6 +32,12 @@ public class GlobalExceptionHandler {
         log.warn("Batch rejected — duplicate eventId detected: {}", ex.getMostSpecificCause().getMessage());
         return ResponseEntity.badRequest()
                 .body(Map.of("message", "Batch rejected: one or more events already exist (duplicate eventId)"));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, String>> handleMissingParam(MissingServletRequestParameterException ex) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("message", "Required parameter '" + ex.getParameterName() + "' is missing"));
     }
 
     @ExceptionHandler(Exception.class)
