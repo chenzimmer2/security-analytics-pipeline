@@ -30,7 +30,7 @@ spring:
       port: 6379
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:9093  # external listener port (see docker-compose EXTERNAL listener)
     consumer:
       group-id: mini-wsa-group
       auto-offset-reset: earliest
