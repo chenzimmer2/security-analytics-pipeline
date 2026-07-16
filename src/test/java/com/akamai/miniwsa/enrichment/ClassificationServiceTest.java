@@ -10,10 +10,14 @@ class ClassificationServiceTest {
     private final ClassificationService service = new ClassificationService();
 
     @Test
-    void knownCategoryMapsCorrectly() {
+    void allSevenCategoriesMapCorrectly() {
         assertThat(service.classify("INJECTION")).isEqualTo("SQL/Command Injection");
         assertThat(service.classify("XSS")).isEqualTo("Cross-Site Scripting");
         assertThat(service.classify("BOT")).isEqualTo("Bot Activity");
+        assertThat(service.classify("PROTOCOL_VIOLATION")).isEqualTo("Protocol Anomaly");
+        assertThat(service.classify("DATA_LEAKAGE")).isEqualTo("Data Exfiltration");
+        assertThat(service.classify("DOS")).isEqualTo("Denial of Service");
+        assertThat(service.classify("RATE_LIMIT")).isEqualTo("Rate Limiting");
     }
 
     @Test

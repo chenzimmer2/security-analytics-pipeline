@@ -91,6 +91,30 @@ class ThreatScoringServiceTest {
     }
 
     @Test
+    void highSeverityScores30() {
+        when(repeatOffenderDetectionService.isRepeatOffender(anyString())).thenReturn(false);
+        // HIGH(30) + MONITOR(0) + /public(0) = 30
+        int score = service.computeScore(buildRequest("HIGH", "MONITOR", "/api/v1/products"));
+        assertThat(score).isEqualTo(30);
+    }
+
+    @Test
+    void mediumSeverityScores20() {
+        when(repeatOffenderDetectionService.isRepeatOffender(anyString())).thenReturn(false);
+        // MEDIUM(20) + MONITOR(0) + /public(0) = 20
+        int score = service.computeScore(buildRequest("MEDIUM", "MONITOR", "/api/v1/products"));
+        assertThat(score).isEqualTo(20);
+    }
+
+    @Test
+    void alertActionScores10() {
+        when(repeatOffenderDetectionService.isRepeatOffender(anyString())).thenReturn(false);
+        // LOW(10) + ALERT(10) + /public(0) = 20
+        int score = service.computeScore(buildRequest("LOW", "ALERT", "/api/v1/products"));
+        assertThat(score).isEqualTo(20);
+    }
+
+    @Test
     void nullPathAddsNoScore() {
         when(repeatOffenderDetectionService.isRepeatOffender(anyString())).thenReturn(false);
         // LOW(10) + MONITOR(0) + null(0) = 10
