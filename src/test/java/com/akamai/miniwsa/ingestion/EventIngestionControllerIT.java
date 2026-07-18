@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -42,6 +43,8 @@ import static org.assertj.core.api.Assertions.assertThat;
                         "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration"
         }
 )
+@Sql(scripts = "/truncate-events.sql",
+     executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class EventIngestionControllerIT {
 
     @Container
@@ -180,6 +183,12 @@ class EventIngestionControllerIT {
         assertThat(retryResponse.getStatusCode())
                 .as("valid event should not have been saved in the failed batch")
                 .isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void postEmptyBatch_returns400() {
+        ResponseEntity<Map> response = post("[]");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     /**

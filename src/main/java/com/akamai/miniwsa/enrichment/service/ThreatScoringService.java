@@ -1,27 +1,29 @@
 package com.akamai.miniwsa.enrichment.service;
 
-import com.akamai.miniwsa.ingestion.dto.SecurityEventRequest;
-import lombok.RequiredArgsConstructor;
+import com.akamai.miniwsa.domain.SecurityEvent;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 /**
  * Computes a threat score 0-100.
  *
  * score = severityScore + actionScore + pathScore + repeatOffenderBonus
  * score = min(score, 100)
+ *
+ * The repeat-offender lookup is passed in as a pre-built cache so that
+ * callers (IngestionService) can resolve all unique IPs in a single batch
+ * query rather than issuing one COUNT query per event.
  */
 @Service
-@RequiredArgsConstructor
 public class ThreatScoringService {
 
-    private final RepeatOffenderDetectionService repeatOffenderDetectionService;
-
-    public int computeScore(SecurityEventRequest request) {
+    public int computeScore(SecurityEvent event, Map<String, Boolean> offenderCache) {
         int score = 0;
-        score += severityScore(request.getRule() != null ? request.getRule().getSeverity() : null);
-        score += actionScore(request.getAction());
-        score += pathScore(request.getPath());
-        if (repeatOffenderDetectionService.isRepeatOffender(request.getClientIp())) {
+        score += severityScore(event.getRuleSeverity());
+        score += actionScore(event.getAction());
+        score += pathScore(event.getPath());
+        if (offenderCache.getOrDefault(event.getClientIp(), false)) {
             score += 15;
         }
         return Math.min(score, 100);

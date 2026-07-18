@@ -19,6 +19,9 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
 
   flyway:
     enabled: true
@@ -30,7 +33,7 @@ spring:
       port: 6379
 
   kafka:
-    bootstrap-servers: localhost:9093 
+    bootstrap-servers: localhost:9093
     consumer:
       group-id: mini-wsa-group
       auto-offset-reset: earliest
@@ -39,6 +42,8 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      type: batch
 
 server:
   port: 8080

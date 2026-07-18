@@ -15,7 +15,10 @@ import java.time.Instant;
 public class SecurityEvent {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "evt_seq")
+    @SequenceGenerator(name = "evt_seq",
+            sequenceName = "security_events_hibernate_id_seq",
+            allocationSize = 50)
     private Long id;
 
     @Column(name = "event_id", nullable = false, unique = true, length = 100)

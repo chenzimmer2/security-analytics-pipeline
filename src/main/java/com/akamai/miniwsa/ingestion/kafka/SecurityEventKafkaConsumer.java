@@ -1,29 +1,37 @@
 package com.akamai.miniwsa.ingestion.kafka;
 
 import com.akamai.miniwsa.ingestion.dto.SecurityEventRequest;
-import com.akamai.miniwsa.ingestion.dto.IngestionResponse;
 import com.akamai.miniwsa.ingestion.service.IngestionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Consumes security events from the {@code security-events} Kafka topic and
- * feeds them through the same ingestion pipeline as the REST endpoint.
+ * Consumes security events from the {@code security-events} Kafka topic.
  *
- * <p>One message = one event (single-object JSON, same schema as the REST body).
+ * <p>Runs in batch mode ({@code spring.kafka.listener.type=batch}).  One poll
+ * cycle delivers a {@code List<String>} of raw JSON payloads.  The consumer
+ * deserialises every message in the list, discards malformed payloads (poison-
+ * pill avoidance), and hands the valid requests to
+ * {@link IngestionService#processKafkaBatch} which:
+ * <ul>
+ *   <li>resolves repeat-offender status with one DB query per unique IP across
+ *       the entire poll batch (not one per event), and</li>
+ *   <li>saves each valid event in its own transaction so a single failure never
+ *       blocks the rest of the batch.</li>
+ * </ul>
  *
  * <p>Error handling strategy — log and skip, never re-queue:
  * <ul>
- *   <li>Malformed JSON → logged as error, offset committed (poison-pill avoidance).</li>
- *   <li>Validation failure → logged as warning, offset committed.</li>
- *   <li>Duplicate event_id → logged as debug (idempotent re-delivery is expected), offset committed.</li>
- *   <li>Unexpected error → logged as error, offset committed.</li>
+ *   <li>Malformed JSON → logged as error, offset committed.</li>
+ *   <li>Validation failure → logged as warning inside processKafkaBatch.</li>
+ *   <li>Duplicate event_id → logged as debug inside processKafkaBatch.</li>
+ *   <li>Unexpected save error → logged as error inside processKafkaBatch.</li>
  * </ul>
  */
 @Slf4j
@@ -35,30 +43,21 @@ public class SecurityEventKafkaConsumer {
     private final ObjectMapper     objectMapper;
 
     @KafkaListener(topics = "security-events", groupId = "mini-wsa-group")
-    public void consume(String message) {
-        SecurityEventRequest request;
-        try {
-            request = objectMapper.readValue(message, SecurityEventRequest.class);
-        } catch (Exception e) {
-            log.error("[Kafka] Malformed message — skipping. Error: {}. Payload: {}",
-                    e.getMessage(), truncate(message));
-            return;
+    public void consume(List<String> messages) {
+        List<SecurityEventRequest> requests = new ArrayList<>(messages.size());
+
+        for (String message : messages) {
+            try {
+                requests.add(objectMapper.readValue(message, SecurityEventRequest.class));
+            } catch (Exception e) {
+                log.error("[Kafka] Malformed message — skipping. Error: {}. Payload: {}",
+                        e.getMessage(), truncate(message));
+            }
         }
 
-        try {
-            IngestionResponse response = ingestionService.ingestAll(List.of(request));
-            if (response.getFailed() > 0) {
-                log.warn("[Kafka] Event rejected by validation — eventId={}, errors={}",
-                        request.getEventId(), response.getErrors());
-            } else {
-                log.debug("[Kafka] Ingested eventId={}", request.getEventId());
-            }
-        } catch (DataIntegrityViolationException e) {
-            log.debug("[Kafka] Duplicate eventId={} — skipping (idempotent re-delivery)",
-                    request.getEventId());
-        } catch (Exception e) {
-            log.error("[Kafka] Unexpected error ingesting eventId={}: {}",
-                    request.getEventId(), e.getMessage());
+        if (!requests.isEmpty()) {
+            log.debug("[Kafka] Processing poll batch of {} event(s)", requests.size());
+            ingestionService.processKafkaBatch(requests);
         }
     }
 

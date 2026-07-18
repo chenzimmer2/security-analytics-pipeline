@@ -98,11 +98,11 @@ public class SamplesService {
         }
         if (category != null) {
             conditions.add("rule_category = ?");
-            params.add(category);
+            params.add(category.toUpperCase());
         }
         if (action != null) {
             conditions.add("action = ?");
-            params.add(action);
+            params.add(action.toUpperCase());
         }
 
         String clause = conditions.isEmpty()
