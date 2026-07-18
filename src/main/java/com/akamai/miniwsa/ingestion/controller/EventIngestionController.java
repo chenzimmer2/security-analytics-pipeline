@@ -32,7 +32,7 @@ public class EventIngestionController {
     private final IngestionService ingestionService;
 
     @PostMapping("/ingest")
-    public ResponseEntity<?> ingest(@RequestBody List<SecurityEventRequest> requests) {
+    public ResponseEntity<IngestionResponse> ingest(@RequestBody List<SecurityEventRequest> requests) {
         IngestionResponse response = ingestionService.ingestAll(requests);
 
         if (response.getFailed() > 0) {

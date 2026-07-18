@@ -100,26 +100,32 @@ Run the app:
 
 ## API Reference
 
+Full documentation — including all request/response fields, validation rules, and copy-paste curl examples — lives in **[docs/API.md](docs/API.md)**.
 
+Quick reference:
 
-### POST /v1/events/ingest
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/events/ingest` | Ingest one event or a JSON array of events |
+| `GET`  | `/v1/stats/summary` | Aggregated analytics over a time window |
+| `GET`  | `/v1/events/samples` | Paginated list of raw events with filters |
 
-Accepts a single event or a JSON array of events.
+### Quick start — ingest a single event
 
 ```bash
 curl -s -X POST http://localhost:8080/v1/events/ingest \
   -H "Content-Type: application/json" \
   -d '{
-    "eventId": "evt-001",
+    "eventId":   "evt-001",
     "timestamp": "2026-07-16T10:00:00Z",
-    "configId": 14227,
-    "clientIp": "203.0.113.42",
-    "hostname": "www.example.com",
-    "path": "/admin/login",
-    "method": "POST",
+    "configId":  14227,
+    "clientIp":  "203.0.113.42",
+    "hostname":  "www.example.com",
+    "path":      "/admin/login",
+    "method":    "POST",
     "rule": {
-      "id": "950001",
-      "name": "SQL_INJECTION",
+      "id":       "950001",
+      "name":     "SQL_INJECTION",
       "severity": "CRITICAL",
       "category": "INJECTION"
     },
@@ -128,25 +134,19 @@ curl -s -X POST http://localhost:8080/v1/events/ingest \
 # → {"ingested": 1, "failed": 0, "errors": []}
 ```
 
-
-
-### GET /v1/stats/summary
+### Quick start — query stats and samples
 
 ```bash
+# Stats for a tenant over a day
 curl -s "http://localhost:8080/v1/stats/summary?\
 configId=14227&from=2026-07-16T00:00:00Z&to=2026-07-16T23:59:59Z" | jq .
-```
 
-`configId` is optional — omit to aggregate across all configurations.
-
-### GET /v1/events/samples
-
-```bash
+# Browse recent INJECTION / DENY events
 curl -s "http://localhost:8080/v1/events/samples?\
 configId=14227&category=INJECTION&action=DENY&limit=10&offset=0" | jq .
 ```
 
-All parameters optional. Results sorted by `event_timestamp DESC`. `limit` max 100.
+See [docs/API.md](docs/API.md) for the complete field reference, all enum values, batch ingestion, error payloads, and pagination examples.
 
 ---
 
@@ -237,7 +237,6 @@ Requires Docker (Testcontainers spins up a real PostgreSQL container for the int
 ## Storage Choice
 
 
-
 I chose PostgreSQL as the system's **Single Source of Truth** because it excels in handling **stable, well-defined schemas** while providing industrial-grade reliability:
 
 - **ACID Compliance:** Ensures absolute data integrity and idempotency, preventing duplicates during ingestion.
@@ -246,6 +245,7 @@ I chose PostgreSQL as the system's **Single Source of Truth** because it excels 
 - **Operational Simplicity:** A single robust database reduces infrastructure complexity, minimizes data synchronization issues, and leverages mature tooling for backups and migrations.
 
 **Indexes** on `(config_id, event_timestamp)`, `(client_ip, received_at)`, `(rule_category, event_timestamp)`, and `(action, event_timestamp)` keep all query paths efficient.
+
 
 **Tradeoff vs. alternatives:** 
 
@@ -268,8 +268,6 @@ To fix this, I am upgrading to a Sliding Window approach using Redis Sorted Sets
 
 ---
 
-
-
 ## Challenges and How I Solved Them
 
 **Isolating the data generator with a Spring profile.** The data generator is a load-testing utility — it should never activate in production or during tests. Rather than adding conditional logic to the main application, I used a dedicated `datagen` Spring profile. Any bean annotated with `@Profile("datagen")` is only instantiated when that profile is active, so the generator is completely invisible to the normal application context. This also allowed configuring the datagen profile with its own `application-datagen.yml` (headless mode, custom counts, target URL) without polluting the main configuration. The result is a clean separation: one codebase, two completely independent runtime behaviours, activated by a single flag.
@@ -277,7 +275,5 @@ To fix this, I am upgrading to a Sliding Window approach using Redis Sorted Sets
 **Database indexes designed around query access patterns.** The analytics queries have predictable, high-frequency access patterns, so indexes were designed specifically for each one rather than added generically. The stats and samples time-range queries filter by `(config_id, event_timestamp)` — the composite index on those two columns lets PostgreSQL skip full table scans entirely and go straight to the matching rows. Repeat-offender detection queries by `(client_ip, received_at)`, so that gets its own index to keep the per-event `COUNT(*)` fast. Category and action filters each get a composite index with `event_timestamp` so they support both filtering and time-range scoping in a single index scan. Without these indexes, every stats query would be a sequential scan across the full table — acceptable at 10K rows, unacceptable at 10M.
 
 **Distributed load protection and DDoS resilience.** The system needed to handle ingestion spikes and prevent potential DDoS attacks without overwhelming the database. A memory-based rate limiter would not work in a multi-instance deployment, and using the primary DB for counter storage would create a performance bottleneck under the exact conditions where protection is most needed. I implemented a distributed rate limiter using Redis atomic operations: `INCR` increments a per-IP counter and `EXPIRE` sets a 60-second TTL on first use, creating a self-resetting fixed window with no cleanup job required. The filter runs before any business logic or DB access, so abusive traffic is rejected at the edge of the application. Redis is the right tool here — it is purpose-built for ephemeral, write-heavy, shared-state operations and keeps the rate-limit counters entirely off the primary database.
-
-**Preparing for batch INSERTs — IDENTITY vs. SEQUENCE tradeoff.** The initial implementation used `@GeneratedValue(strategy = IDENTITY)`, which is the simplest choice for an auto-incrementing primary key. However, `IDENTITY` generation has a hidden cost: Hibernate must execute each INSERT individually and wait for the database to return the generated key before it can continue. This makes JDBC batch mode impossible regardless of how `hibernate.jdbc.batch_size` is configured. To enable batching, the strategy was switched to `SEQUENCE` backed by a dedicated Flyway-managed sequence (`security_events_hibernate_id_seq`, `INCREMENT BY 50`). With a sequence, Hibernate can pre-allocate a block of IDs in a single `nextval()` call and then flush all the INSERTs in one JDBC batch round-trip. `hibernate.jdbc.batch_size=50` and `order_inserts=true` are now set in `application.yml`. The infrastructure and configuration are in place, but the actual JDBC batching behaviour has not been conclusively verified under load in this environment (e.g. via P6Spy statement logging or JDBC batch event counters) — confirming the driver is coalescing rows into multi-row statements is the next validation step before treating this as production-ready.
 
 **Separating analytics time from ingestion time.** Maintaining two timestamps — `event_timestamp` (client-reported) and `received_at` (server-assigned) — was a deliberate design decision with real correctness implications. If analytics filtered by `received_at`, backdated events would appear in the wrong time window. If repeat-offender detection used `event_timestamp`, an attacker could bypass the +15 bonus by spreading event timestamps across the past hour. Keeping them separate, and building different indexes for each access pattern, was the only design that satisfied both requirements correctly.
