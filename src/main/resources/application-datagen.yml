@@ -1,0 +1,18 @@
+datagen:
+  count: 10000
+  batch-size: 100
+  target-url: http://localhost:8080
+  attacker-ip-count: 3
+  wave-seed-size: 7
+
+# Run without a web server — generator only makes outbound HTTP calls
+spring:
+  main:
+    web-application-type: none
+
+logging:
+  level:
+    com.akamai.miniwsa.datagen: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.flywaydb: WARN
